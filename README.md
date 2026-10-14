@@ -3,6 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Stream Deck](https://img.shields.io/badge/Stream%20Deck-v6.0+-blue)](https://www.elgato.com/stream-deck)
 [![Node.js](https://img.shields.io/badge/Node.js-v20+-green)](https://nodejs.org/)
+[![AI-Assisted](https://img.shields.io/badge/AI-Assisted%20Development-8A2BE2.svg)](#-ai-보조-개발-안내-ai-assisted-development)
 
 네이버 **치지직(CHZZK)** 스트리머의 실시간 방송 상태를 Elgato Stream Deck 버튼에서 한눈에 확인하고, 원클릭으로 해당 방송에 즉시 접속할 수 있는 스트림덱 플러그인입니다.
 
@@ -17,6 +18,10 @@
 - 본 소프트웨어는 오픈소스 라이선스(MIT License)에 따라 제공되며, 사용으로 인해 발생하는 모든 문제(계정, 네트워크, 이용 제한 등)에 대해 개발자는 어떠한 법적 책임도 지지 않습니다.
 - 네이버 및 치지직의 공식 API 제공 정책이나 서비스 구조 변경에 따라 플러그인의 일부 또는 전체 기능이 예고 없이 중단되거나 정상 작동하지 않을 수 있습니다.
 - 모든 사용자는 치지직 서비스의 이용약관 및 관련 법령을 준수해야 합니다.
+
+### 🤖 AI 보조 개발 안내 (AI-Assisted Development)
+- 본 프로젝트의 전체 소스코드 아키텍처, TypeScript 구현, SVG 렌더러 알고리즘 및 문서는 **AI 코딩 어시스턴트(Google DeepMind Antigravity)와의 페어 프로그래밍을 통해 생성 및 최적화**되었습니다.
+- 모든 구현 사항은 실제 네이버 치지직 API 및 이미지 CDN 환경에서의 통신 검증, 유닛 테스트(`npm test`), Elgato Stream Deck 런타임 호환성 검증을 거쳤습니다.
 
 ### 📌 상표 및 저작권 안내 (Trademarks)
 - `치지직(CHZZK)`, `네이버(NAVER)` 및 관련 로고/서비스 명칭은 네이버(주)(NAVER Corp.)의 등록상표입니다.
