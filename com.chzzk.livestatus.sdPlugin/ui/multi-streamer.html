@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>치지직 통합 스트리머 설정</title>
+  <link rel="stylesheet" href="inspector.css" />
+</head>
+<body>
+  <div class="sdpi-wrapper">
+    <!-- 스트리머 검색 및 추가 -->
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">스트리머 추가 (검색)</div>
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="스트리머 닉네임 검색 후 클릭하여 추가" autocomplete="off" />
+        <div class="search-results" id="searchResults"></div>
+      </div>
+    </div>
+
+    <!-- 채널 ID 직접 추가 -->
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">채널 ID로 직접 추가</div>
+      <div class="sdpi-item-row">
+        <input type="text" id="manualIdInput" placeholder="32자리 채널 ID 입력" />
+        <button id="addManualBtn" class="btn-primary" style="white-space: nowrap;">추가</button>
+      </div>
+    </div>
+
+    <!-- 등록된 스트리머 목록 (우선순위 순) -->
+    <div class="sdpi-item">
+      <div class="sdpi-item-row">
+        <div class="sdpi-item-label">등록된 스트리머 목록 (우선순위 순)</div>
+        <span id="channelCountBadge" style="font-size: 10px; color: var(--accent-color);">0명</span>
+      </div>
+      <div class="channel-list" id="channelListContainer">
+        <div class="helper-text" id="emptyNotice">등록된 스트리머가 없습니다. 위에서 검색하여 추가하세요.</div>
+      </div>
+      <div class="helper-text">위쪽에 위치할수록 높은 우선순위를 가지며 기본 화면에 우선 표시됩니다.</div>
+    </div>
+
+    <!-- 갱신 주기 -->
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">새로고침 주기 (초)</div>
+      <input type="number" id="intervalInput" min="10" max="600" value="60" />
+      <div class="helper-text">기본값: 60초 (10초 ~ 600초)</div>
+    </div>
+
+    <!-- API 프록시/캐시 서버 (공통 공유) -->
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">공통 API 프록시 / 캐시 서버 (선택사항)</div>
+      <input type="text" id="proxyUrlInput" placeholder="예: https://proxy.domain.com 또는 http://localhost:8000" />
+      <div class="helper-text">어느 버튼에서나 한 번 입력하면 모든 버튼에 자동 공유됩니다. (도메인, https, 로컬 모두 지원)</div>
+    </div>
+
+    <!-- 옵션: 온라인 스트리머만 순환 -->
+    <div class="sdpi-item">
+      <label class="checkbox-label">
+        <input type="checkbox" id="cycleLiveOnlyCheckbox" checked />
+        <span>클릭 시 방송 중인(온라인) 스트리머만 순환</span>
+      </label>
+      <div class="helper-text" style="margin-left: 22px;">체크 해제 시 오프라인 스트리머도 순서대로 순환합니다.</div>
+    </div>
+  </div>
+
+  <script src="inspector.js"></script>
+  <script>
+    const searchInput = document.getElementById("searchInput");
+    const searchResults = document.getElementById("searchResults");
+    const manualIdInput = document.getElementById("manualIdInput");
+    const addManualBtn = document.getElementById("addManualBtn");
+    const channelListContainer = document.getElementById("channelListContainer");
+    const emptyNotice = document.getElementById("emptyNotice");
+    const channelCountBadge = document.getElementById("channelCountBadge");
+    const intervalInput = document.getElementById("intervalInput");
+    const proxyUrlInput = document.getElementById("proxyUrlInput");
+    const cycleLiveOnlyCheckbox = document.getElementById("cycleLiveOnlyCheckbox");
+
+    let channels = [];
+    let debounceTimer = null;
+
+    window.initInspector = async function(settings) {
+      if (Array.isArray(settings.channels)) {
+        channels = [...settings.channels];
+      }
+      if (settings.pollingInterval) {
+        intervalInput.value = settings.pollingInterval;
+      }
+      if (settings.proxyUrl) {
+        proxyUrlInput.value = settings.proxyUrl;
+      } else if (currentGlobalSettings && currentGlobalSettings.proxyUrl) {
+        proxyUrlInput.value = currentGlobalSettings.proxyUrl;
+      }
+      if (typeof settings.cycleOnlyLive === "boolean") {
+        cycleLiveOnlyCheckbox.checked = settings.cycleOnlyLive;
+      }
+      renderChannelList();
+
+      // 채널 중 이름이나 프로필 사진이 누락된 항목이 있으면 비동기로 최신화
+      let hasUpdate = false;
+      for (let i = 0; i < channels.length; i++) {
+        const ch = channels[i];
+        if (!ch.channelImageUrl || !ch.channelName || ch.channelName.endsWith("...")) {
+          try {
+            const info = await getChzzkChannelInfo(ch.channelId);
+            if (info && info.channelName) {
+              channels[i].channelName = info.channelName;
+              channels[i].channelImageUrl = info.channelImageUrl || channels[i].channelImageUrl;
+              hasUpdate = true;
+            }
+          } catch (e) {
+            // 무시
+          }
+        }
+      }
+      if (hasUpdate) {
+        renderChannelList();
+        saveCurrentState();
+      }
+    };
+
+    window.onGlobalSettingsLoaded = function(globalSettings) {
+      if (!proxyUrlInput.value && globalSettings?.proxyUrl) {
+        proxyUrlInput.value = globalSettings.proxyUrl;
+      }
+    };
+
+    function saveCurrentState() {
+      saveSettings({
+        channels: channels,
+        pollingInterval: parseInt(intervalInput.value, 10) || 60,
+        proxyUrl: proxyUrlInput.value.trim(),
+        cycleOnlyLive: cycleLiveOnlyCheckbox.checked,
+      });
+    }
+
+    intervalInput.addEventListener("change", () => {
+      saveCurrentState();
+    });
+
+    proxyUrlInput.addEventListener("change", () => {
+      const url = proxyUrlInput.value.trim();
+      saveCurrentState();
+      saveGlobalSettings({ proxyUrl: url });
+    });
+
+    cycleLiveOnlyCheckbox.addEventListener("change", () => {
+      saveCurrentState();
+    });
+
+    addManualBtn.addEventListener("click", async () => {
+      const id = manualIdInput.value.trim();
+      if (!id) return;
+      if (channels.some((c) => c.channelId === id)) {
+        alert("이미 등록된 채널입니다.");
+        return;
+      }
+
+      const newIndex = channels.length;
+      channels.push({
+        channelId: id,
+        channelName: id.substring(0, 8) + "...",
+        channelImageUrl: null,
+      });
+      manualIdInput.value = "";
+      renderChannelList();
+      saveCurrentState();
+
+      // 비동기로 실제 채널 정보 조회 및 갱신
+      try {
+        const info = await getChzzkChannelInfo(id);
+        if (info && info.channelName) {
+          channels[newIndex].channelName = info.channelName;
+          channels[newIndex].channelImageUrl = info.channelImageUrl;
+          renderChannelList();
+          saveCurrentState();
+        }
+      } catch (e) {
+        // 실패 시 ID 기반 유지
+      }
+    });
+
+    // 검색 자동완성
+    searchInput.addEventListener("input", () => {
+      clearTimeout(debounceTimer);
+      const query = searchInput.value.trim();
+      if (!query) {
+        searchResults.style.display = "none";
+        return;
+      }
+
+      debounceTimer = setTimeout(async () => {
+        const results = await searchChzzkChannels(query);
+        renderSearchResults(results);
+      }, 300);
+    });
+
+    function renderSearchResults(list) {
+      searchResults.innerHTML = "";
+      if (!list || list.length === 0) {
+        searchResults.style.display = "none";
+        return;
+      }
+
+      list.forEach((ch) => {
+        const item = document.createElement("div");
+        item.className = "search-item";
+
+        const img = document.createElement("img");
+        img.className = "search-avatar";
+        img.src = ch.channelImageUrl || "";
+        img.onerror = () => { img.style.display = "none"; };
+
+        const info = document.createElement("div");
+        info.className = "search-info";
+
+        const nameEl = document.createElement("div");
+        nameEl.className = "search-name";
+        nameEl.textContent = ch.channelName;
+
+        if (ch.openLive) {
+          const liveTag = document.createElement("span");
+          liveTag.className = "search-live-tag";
+          liveTag.textContent = "LIVE";
+          nameEl.appendChild(liveTag);
+        }
+
+        info.appendChild(nameEl);
+        item.appendChild(img);
+        item.appendChild(info);
+
+        item.addEventListener("click", () => {
+          if (!channels.some((c) => c.channelId === ch.channelId)) {
+            channels.push({
+              channelId: ch.channelId,
+              channelName: ch.channelName,
+              channelImageUrl: ch.channelImageUrl,
+            });
+            renderChannelList();
+            saveCurrentState();
+          }
+          searchResults.style.display = "none";
+          searchInput.value = "";
+        });
+
+        searchResults.appendChild(item);
+      });
+
+      searchResults.style.display = "block";
+    }
+
+    function renderChannelList() {
+      channelListContainer.innerHTML = "";
+      channelCountBadge.textContent = `${channels.length}명`;
+
+      if (channels.length === 0) {
+        channelListContainer.appendChild(emptyNotice);
+        emptyNotice.style.display = "block";
+        return;
+      }
+
+      channels.forEach((ch, idx) => {
+        const item = document.createElement("div");
+        item.className = "channel-list-item";
+
+        const idxEl = document.createElement("span");
+        idxEl.className = "item-index";
+        idxEl.textContent = `${idx + 1}`;
+
+        const img = document.createElement("img");
+        img.className = "item-avatar";
+        img.src = ch.channelImageUrl || "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><rect width='24' height='24' fill='%23333'/></svg>";
+        img.onerror = () => { img.style.display = "none"; };
+
+        const nameEl = document.createElement("span");
+        nameEl.className = "item-name";
+        nameEl.textContent = ch.channelName || ch.channelId;
+
+        // 위로 이동 버튼
+        const btnUp = document.createElement("button");
+        btnUp.className = "item-btn";
+        btnUp.textContent = "▲";
+        btnUp.title = "우선순위 올리기";
+        btnUp.disabled = idx === 0;
+        btnUp.addEventListener("click", () => {
+          if (idx > 0) {
+            const temp = channels[idx];
+            channels[idx] = channels[idx - 1];
+            channels[idx - 1] = temp;
+            renderChannelList();
+            saveCurrentState();
+          }
+        });
+
+        // 아래로 이동 버튼
+        const btnDown = document.createElement("button");
+        btnDown.className = "item-btn";
+        btnDown.textContent = "▼";
+        btnDown.title = "우선순위 내리기";
+        btnDown.disabled = idx === channels.length - 1;
+        btnDown.addEventListener("click", () => {
+          if (idx < channels.length - 1) {
+            const temp = channels[idx];
+            channels[idx] = channels[idx + 1];
+            channels[idx + 1] = temp;
+            renderChannelList();
+            saveCurrentState();
+          }
+        });
+
+        // 삭제 버튼
+        const btnDel = document.createElement("button");
+        btnDel.className = "item-btn btn-remove";
+        btnDel.textContent = "✕";
+        btnDel.title = "삭제";
+        btnDel.addEventListener("click", () => {
+          channels.splice(idx, 1);
+          renderChannelList();
+          saveCurrentState();
+        });
+
+        item.appendChild(idxEl);
+        item.appendChild(img);
+        item.appendChild(nameEl);
+        item.appendChild(btnUp);
+        item.appendChild(btnDown);
+        item.appendChild(btnDel);
+
+        channelListContainer.appendChild(item);
+      });
+    }
+
+    document.addEventListener("click", (e) => {
+      if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+        searchResults.style.display = "none";
+      }
+    });
+  </script>
+</body>
+</html>

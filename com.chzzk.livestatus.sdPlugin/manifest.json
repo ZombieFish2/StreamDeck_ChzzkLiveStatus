@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "Author": "YJY",
+  "Description": "네이버 치지직 스트리머의 방송 상태를 실시간으로 확인하고 이동하는 플러그인",
+  "Name": "치지직 방송 상태",
+  "Icon": "assets/icon",
+  "Version": "1.0.0.0",
+  "SDKVersion": 2,
+  "CodePath": "bin/plugin.js",
+  "Category": "치지직 (CHZZK)",
+  "CategoryIcon": "assets/icon",
+  "Nodejs": {
+    "Version": "20"
+  },
+  "Actions": [
+    {
+      "UUID": "com.chzzk.livestatus.single",
+      "Name": "치지직 스트리머 (개별)",
+      "Icon": "assets/action-single",
+      "PropertyInspectorPath": "ui/single-streamer.html",
+      "Tooltip": "치지직 스트리머의 방송 상태를 표시합니다. 클릭 시 채널로 이동합니다.",
+      "States": [
+        {
+          "Image": "assets/action-single",
+          "TitleAlignment": "middle"
+        }
+      ]
+    },
+    {
+      "UUID": "com.chzzk.livestatus.multi",
+      "Name": "치지직 스트리머 (통합)",
+      "Icon": "assets/action-multi",
+      "PropertyInspectorPath": "ui/multi-streamer.html",
+      "Tooltip": "여러 치지직 스트리머를 통합 관리하고 라이브 스트리머를 우선 순환 표시합니다.",
+      "States": [
+        {
+          "Image": "assets/action-multi",
+          "TitleAlignment": "middle"
+        }
+      ]
+    }
+  ],
+  "OS": [
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    },
+    {
+      "Platform": "mac",
+      "MinimumVersion": "12"
+    }
+  ],
+  "Software": {
+    "MinimumVersion": "6.5"
+  }
+}
