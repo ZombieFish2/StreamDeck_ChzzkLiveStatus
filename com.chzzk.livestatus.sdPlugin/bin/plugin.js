@@ -8433,64 +8433,78 @@ class ChzzkApi {
     }
     /**
      * 채널 검색 (검색어 자동완성 지원)
+     * - 프록시 서버가 검색을 지원하지 않거나 404를 반환하면 공식 치지직 서버로 자동 폴백
      */
     static async searchChannels(keyword) {
         if (!keyword || keyword.trim().length === 0)
             return [];
-        try {
-            const encoded = encodeURIComponent(keyword.trim());
-            const base = this.getBaseUrl();
-            const res = await fetch(`${base}/service/v1/search/channels?keyword=${encoded}&size=10`, {
-                headers: DEFAULT_HEADERS,
-                signal: AbortSignal.timeout(6000),
-            });
-            if (!res.ok)
-                return [];
-            const json = (await res.json());
-            if (json.code !== 200 || !json.content?.data)
-                return [];
-            return json.content.data.map((item) => ({
-                channelId: item.channel.channelId,
-                channelName: item.channel.channelName,
-                channelImageUrl: item.channel.channelImageUrl || null,
-                openLive: !!item.channel.openLive,
-                followerCount: item.channel.followerCount,
-            }));
+        const encoded = encodeURIComponent(keyword.trim());
+        // 시도할 서버 목록 (프록시가 설정되어 있으면 프록시 먼저, 그 다음 공식 서버)
+        const baseUrls = [this.getBaseUrl()];
+        if (this.getBaseUrl() !== DEFAULT_OFFICIAL_URL) {
+            baseUrls.push(DEFAULT_OFFICIAL_URL);
         }
-        catch (err) {
-            console.error("[ChzzkApi] Error searching channels:", err);
-            return [];
+        for (const base of baseUrls) {
+            try {
+                const res = await fetch(`${base}/service/v1/search/channels?keyword=${encoded}&size=10`, {
+                    headers: DEFAULT_HEADERS,
+                    signal: AbortSignal.timeout(5000),
+                });
+                if (!res.ok)
+                    continue;
+                const json = (await res.json());
+                if (json.code !== 200 || !json.content?.data)
+                    continue;
+                return json.content.data.map((item) => ({
+                    channelId: item.channel.channelId,
+                    channelName: item.channel.channelName,
+                    channelImageUrl: item.channel.channelImageUrl || null,
+                    openLive: !!item.channel.openLive,
+                    followerCount: item.channel.followerCount,
+                }));
+            }
+            catch (err) {
+                // 다음 URL 시도
+            }
         }
+        return [];
     }
     /**
      * 채널 상세 정보 조회 (service/v1/channels/{channelId})
+     * - 프록시 실패 시 공식 서버로 자동 폴백
      */
     static async getChannel(channelId) {
         if (!channelId)
             return null;
-        try {
-            const base = this.getBaseUrl();
-            const res = await fetch(`${base}/service/v1/channels/${encodeURIComponent(channelId)}`, {
-                headers: DEFAULT_HEADERS,
-                signal: AbortSignal.timeout(6000),
-            });
-            if (!res.ok)
-                return null;
-            const json = (await res.json());
-            if (json.code !== 200 || !json.content)
-                return null;
-            return {
-                channelId: json.content.channelId,
-                channelName: json.content.channelName,
-                channelImageUrl: json.content.channelImageUrl || null,
-                openLive: !!json.content.openLive,
-                followerCount: json.content.followerCount,
-            };
+        const encoded = encodeURIComponent(channelId.trim());
+        const baseUrls = [this.getBaseUrl()];
+        if (this.getBaseUrl() !== DEFAULT_OFFICIAL_URL) {
+            baseUrls.push(DEFAULT_OFFICIAL_URL);
         }
-        catch (err) {
-            console.error(`[ChzzkApi] Error fetching channel ${channelId}:`, err);
-            return null;
+        for (const base of baseUrls) {
+            try {
+                const res = await fetch(`${base}/service/v1/channels/${encoded}`, {
+                    headers: DEFAULT_HEADERS,
+                    signal: AbortSignal.timeout(5000),
+                });
+                if (!res.ok)
+                    continue;
+                const json = (await res.json());
+                if (json.code !== 200 || !json.content)
+                    continue;
+                return {
+                    channelId: json.content.channelId,
+                    channelName: json.content.channelName,
+                    channelImageUrl: json.content.channelImageUrl || null,
+                    openLive: !!json.content.openLive,
+                    followerCount: json.content.followerCount,
+                };
+            }
+            catch (err) {
+                // 다음 URL 시도
+            }
         }
+        return null;
     }
     /**
      * 실시간 라이브 상세 조회 (v3 live-detail 최우선, v2 및 polling 폴백)
@@ -8977,7 +8991,7 @@ let SingleStreamerAction = (() => {
         }
         async onSendToPlugin(ev) {
             const payload = ev.payload;
-            if (payload?.proxyUrl !== undefined) {
+            if (payload?.proxyUrl && payload.proxyUrl.trim().length > 0) {
                 ChzzkApi.setBaseUrl(payload.proxyUrl);
             }
             if (payload?.event === "searchChannels") {
@@ -9270,7 +9284,7 @@ let MultiStreamerAction = (() => {
         }
         async onSendToPlugin(ev) {
             const payload = ev.payload;
-            if (payload?.proxyUrl !== undefined) {
+            if (payload?.proxyUrl && payload.proxyUrl.trim().length > 0) {
                 ChzzkApi.setBaseUrl(payload.proxyUrl);
             }
             if (payload?.event === "searchChannels") {

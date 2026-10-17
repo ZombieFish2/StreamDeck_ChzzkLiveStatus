@@ -4,8 +4,8 @@ let actionInfo = null;
 let currentSettings = {};
 let currentGlobalSettings = {};
 let searchTimeout = null;
-let pendingSearchResolve = null;
-let pendingChannelInfoResolve = null;
+const pendingSearchResolvers = new Map();
+const pendingChannelInfoResolvers = new Map();
 
 window.connectElgatoStreamDeckSocket = function (
   inPort,
@@ -54,12 +54,31 @@ window.connectElgatoStreamDeckSocket = function (
         }
       } else if (data.event === "sendToPropertyInspector") {
         const payload = data.payload;
-        if (payload?.event === "searchResults" && pendingSearchResolve) {
-          pendingSearchResolve(payload.data || []);
-          pendingSearchResolve = null;
-        } else if (payload?.event === "channelInfo" && pendingChannelInfoResolve) {
-          pendingChannelInfoResolve(payload.data || null);
-          pendingChannelInfoResolve = null;
+        if (payload?.event === "searchResults") {
+          const reqId = payload.requestId;
+          if (reqId && pendingSearchResolvers.has(reqId)) {
+            pendingSearchResolvers.get(reqId)(payload.data || []);
+            pendingSearchResolvers.delete(reqId);
+          } else {
+            // fallback: 첫 번째 대기 중인 resolver 처리
+            for (const [id, resolve] of pendingSearchResolvers.entries()) {
+              resolve(payload.data || []);
+              pendingSearchResolvers.delete(id);
+              break;
+            }
+          }
+        } else if (payload?.event === "channelInfo") {
+          const reqId = payload.requestId;
+          if (reqId && pendingChannelInfoResolvers.has(reqId)) {
+            pendingChannelInfoResolvers.get(reqId)(payload.data || null);
+            pendingChannelInfoResolvers.delete(reqId);
+          } else {
+            for (const [id, resolve] of pendingChannelInfoResolvers.entries()) {
+              resolve(payload.data || null);
+              pendingChannelInfoResolvers.delete(id);
+              break;
+            }
+          }
         }
       }
     } catch (e) {
@@ -117,51 +136,29 @@ function getEffectiveProxyUrl() {
 }
 
 /**
- * 치지직 채널 검색 (직접 fetch 시도 후 백엔드 프록시 폴백)
+ * 치지직 채널 검색 (플러그인 백엔드를 통해 안전하게 검색)
  */
 async function searchChzzkChannels(keyword) {
   if (!keyword || keyword.trim().length === 0) return [];
   const trimmed = keyword.trim();
-
+  const reqId = Date.now().toString() + "_" + Math.random().toString(36).substring(2, 7);
   const proxy = getEffectiveProxyUrl();
-  const baseUrl = proxy ? proxy.replace(/\/+$/, "") : "https://api.chzzk.naver.com";
-
-  try {
-    const res = await fetch(
-      `${baseUrl}/service/v1/search/channels?keyword=${encodeURIComponent(
-        trimmed
-      )}&size=10`
-    );
-    if (res.ok) {
-      const json = await res.json();
-      if (json.code === 200 && json.content?.data) {
-        return json.content.data.map((item) => ({
-          channelId: item.channel.channelId,
-          channelName: item.channel.channelName,
-          channelImageUrl: item.channel.channelImageUrl,
-          openLive: !!item.channel.openLive,
-        }));
-      }
-    }
-  } catch (e) {
-    // CORS 또는 네트워크 오류 시 백엔드 플러그인에 요청
-  }
 
   return new Promise((resolve) => {
-    pendingSearchResolve = resolve;
+    pendingSearchResolvers.set(reqId, resolve);
     sendToPlugin({
       event: "searchChannels",
       keyword: trimmed,
       proxyUrl: proxy,
-      requestId: Date.now().toString(),
+      requestId: reqId,
     });
-    // 4초 후 타임아웃
+    // 5초 타임아웃
     setTimeout(() => {
-      if (pendingSearchResolve) {
-        pendingSearchResolve([]);
-        pendingSearchResolve = null;
+      if (pendingSearchResolvers.has(reqId)) {
+        pendingSearchResolvers.get(reqId)([]);
+        pendingSearchResolvers.delete(reqId);
       }
-    }, 4000);
+    }, 5000);
   });
 }
 
@@ -171,42 +168,22 @@ async function searchChzzkChannels(keyword) {
 async function getChzzkChannelInfo(channelId) {
   if (!channelId || channelId.trim().length === 0) return null;
   const trimmed = channelId.trim();
-
+  const reqId = Date.now().toString() + "_" + Math.random().toString(36).substring(2, 7);
   const proxy = getEffectiveProxyUrl();
-  const baseUrl = proxy ? proxy.replace(/\/+$/, "") : "https://api.chzzk.naver.com";
-
-  try {
-    const res = await fetch(
-      `${baseUrl}/service/v1/channels/${encodeURIComponent(trimmed)}`
-    );
-    if (res.ok) {
-      const json = await res.json();
-      if (json.code === 200 && json.content) {
-        return {
-          channelId: json.content.channelId,
-          channelName: json.content.channelName,
-          channelImageUrl: json.content.channelImageUrl,
-          openLive: !!json.content.openLive,
-        };
-      }
-    }
-  } catch (e) {
-    // CORS 또는 오류 시 백엔드 프록시 폴백
-  }
 
   return new Promise((resolve) => {
-    pendingChannelInfoResolve = resolve;
+    pendingChannelInfoResolvers.set(reqId, resolve);
     sendToPlugin({
       event: "getChannelInfo",
       channelId: trimmed,
       proxyUrl: proxy,
-      requestId: Date.now().toString(),
+      requestId: reqId,
     });
     setTimeout(() => {
-      if (pendingChannelInfoResolve) {
-        pendingChannelInfoResolve(null);
-        pendingChannelInfoResolve = null;
+      if (pendingChannelInfoResolvers.has(reqId)) {
+        pendingChannelInfoResolvers.get(reqId)(null);
+        pendingChannelInfoResolvers.delete(reqId);
       }
-    }, 4000);
+    }, 5000);
   });
 }

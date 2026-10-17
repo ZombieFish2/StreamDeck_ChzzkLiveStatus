@@ -286,7 +286,7 @@ export class MultiStreamerAction extends SingletonAction<MultiStreamerSettings> 
     ev: SendToPluginEvent<any, MultiStreamerSettings>
   ): Promise<void> {
     const payload = ev.payload;
-    if (payload?.proxyUrl !== undefined) {
+    if (payload?.proxyUrl && payload.proxyUrl.trim().length > 0) {
       ChzzkApi.setBaseUrl(payload.proxyUrl);
     }
 

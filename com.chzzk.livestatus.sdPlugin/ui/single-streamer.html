@@ -69,18 +69,17 @@
         channelIdInput.value = settings.channelId;
         updateSelectedCard(settings.channelName || "치지직 스트리머", settings.channelId, null);
 
-        // 비동기로 최신 채널 정보(이름, 프로필 사진) 가져오기
-        try {
-          const info = await getChzzkChannelInfo(settings.channelId);
+        // 백그라운드로 최신 채널 정보(이름, 프로필 사진) 가져오기
+        getChzzkChannelInfo(settings.channelId).then((info) => {
           if (info && info.channelName) {
             updateSelectedCard(info.channelName, info.channelId, info.channelImageUrl);
             if (!settings.channelName) {
               saveSettings({ channelName: info.channelName });
             }
           }
-        } catch (e) {
+        }).catch((e) => {
           console.warn("[PI] getChzzkChannelInfo error:", e);
-        }
+        });
       }
       if (settings.pollingInterval) {
         intervalInput.value = settings.pollingInterval;

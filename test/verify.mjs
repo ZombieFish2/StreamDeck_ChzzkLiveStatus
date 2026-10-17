@@ -39,6 +39,15 @@ async function runTests() {
   assert(first.channelId, "Channel ID must exist");
   assert(first.channelName, "Channel Name must exist");
 
+  // 2-1. 프록시 서버가 설정된 상태에서도 검색이 정상 작동하는지 테스트 (후야 검색)
+  console.log("\n2-1. 프록시 서버 설정 시 자동 폴백 및 '후야' 검색 테스트...");
+  ChzzkApi.setBaseUrl("http://localhost:9999"); // 미작동/검색 미지원 가짜 프록시 설정
+  const proxySearchResults = await ChzzkApi.searchChannels("후야");
+  assert(Array.isArray(proxySearchResults), "Search results must be an array");
+  assert(proxySearchResults.length > 0, "Search results must find '후야' channels via fallback");
+  console.log(`  ✓ 프록시 미지원 시 공식 서버 자동 폴백 성공: ${proxySearchResults[0].channelName} (${proxySearchResults.length}개 발견)`);
+  ChzzkApi.setBaseUrl(""); // 공식 URL로 원복
+
   // 3. 최신 v3 live-detail API 테스트 (1회 호출로 상태+프로필 획득)
   console.log("\n3. 최신 v3 live-detail API 테스트...");
   const liveDetail = await ChzzkApi.getLiveDetail(first.channelId);

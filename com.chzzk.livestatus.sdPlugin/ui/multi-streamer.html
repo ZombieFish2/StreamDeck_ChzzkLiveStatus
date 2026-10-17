@@ -94,27 +94,29 @@
       }
       renderChannelList();
 
-      // 채널 중 이름이나 프로필 사진이 누락된 항목이 있으면 비동기로 최신화
-      let hasUpdate = false;
-      for (let i = 0; i < channels.length; i++) {
-        const ch = channels[i];
+      // 채널 중 이름이나 프로필 사진이 누락된 항목이 있으면 백그라운드로 병렬 최신화
+      const updatePromises = channels.map(async (ch, i) => {
         if (!ch.channelImageUrl || !ch.channelName || ch.channelName.endsWith("...")) {
           try {
             const info = await getChzzkChannelInfo(ch.channelId);
             if (info && info.channelName) {
               channels[i].channelName = info.channelName;
               channels[i].channelImageUrl = info.channelImageUrl || channels[i].channelImageUrl;
-              hasUpdate = true;
+              return true;
             }
           } catch (e) {
             // 무시
           }
         }
-      }
-      if (hasUpdate) {
-        renderChannelList();
-        saveCurrentState();
-      }
+        return false;
+      });
+
+      Promise.all(updatePromises).then((results) => {
+        if (results.some(Boolean)) {
+          renderChannelList();
+          saveCurrentState();
+        }
+      });
     };
 
     window.onGlobalSettingsLoaded = function(globalSettings) {
