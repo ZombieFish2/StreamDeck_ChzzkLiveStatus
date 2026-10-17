@@ -76,6 +76,7 @@
 
     let channels = [];
     let debounceTimer = null;
+    let currentSearchToken = 0;
 
     window.initInspector = async function(settings) {
       if (Array.isArray(settings.channels)) {
@@ -185,17 +186,33 @@
       clearTimeout(debounceTimer);
       const query = searchInput.value.trim();
       if (!query) {
+        currentSearchToken++;
+        searchResults.innerHTML = "";
         searchResults.style.display = "none";
         return;
       }
 
+      const token = ++currentSearchToken;
       debounceTimer = setTimeout(async () => {
-        const results = await searchChzzkChannels(query);
-        renderSearchResults(results);
+        try {
+          const results = await searchChzzkChannels(query);
+          if (token !== currentSearchToken || !searchInput.value.trim()) return;
+          renderSearchResults(results);
+        } catch (e) {
+          if (token === currentSearchToken) {
+            searchResults.style.display = "none";
+          }
+        }
       }, 300);
     });
 
     function renderSearchResults(list) {
+      if (!searchInput.value.trim()) {
+        searchResults.innerHTML = "";
+        searchResults.style.display = "none";
+        return;
+      }
+
       searchResults.innerHTML = "";
       if (!list || list.length === 0) {
         searchResults.style.display = "none";
@@ -230,6 +247,8 @@
         item.appendChild(info);
 
         item.addEventListener("click", () => {
+          currentSearchToken++;
+          clearTimeout(debounceTimer);
           if (!channels.some((c) => c.channelId === ch.channelId)) {
             channels.push({
               channelId: ch.channelId,
@@ -239,8 +258,9 @@
             renderChannelList();
             saveCurrentState();
           }
-          searchResults.style.display = "none";
           searchInput.value = "";
+          searchResults.innerHTML = "";
+          searchResults.style.display = "none";
         });
 
         searchResults.appendChild(item);

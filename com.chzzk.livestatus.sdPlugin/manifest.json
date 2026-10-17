@@ -4,7 +4,7 @@
   "Description": "네이버 치지직 스트리머의 방송 상태를 실시간으로 확인하고 이동하는 플러그인",
   "Name": "치지직 방송 상태",
   "Icon": "assets/icon",
-  "Version": "1.0.0.0",
+  "Version": "1.0.2.0",
   "SDKVersion": 2,
   "CodePath": "bin/plugin.js",
   "Category": "치지직 (CHZZK)",

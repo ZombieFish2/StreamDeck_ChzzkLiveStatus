@@ -63,6 +63,7 @@
     const proxyUrlInput = document.getElementById("proxyUrlInput");
 
     let debounceTimer = null;
+    let currentSearchToken = 0;
 
     window.initInspector = async function(settings) {
       if (settings.channelId) {
@@ -152,17 +153,33 @@
       clearTimeout(debounceTimer);
       const query = searchInput.value.trim();
       if (!query) {
+        currentSearchToken++;
+        searchResults.innerHTML = "";
         searchResults.style.display = "none";
         return;
       }
 
+      const token = ++currentSearchToken;
       debounceTimer = setTimeout(async () => {
-        const results = await searchChzzkChannels(query);
-        renderSearchResults(results);
+        try {
+          const results = await searchChzzkChannels(query);
+          if (token !== currentSearchToken || !searchInput.value.trim()) return;
+          renderSearchResults(results);
+        } catch (e) {
+          if (token === currentSearchToken) {
+            searchResults.style.display = "none";
+          }
+        }
       }, 300);
     });
 
     function renderSearchResults(list) {
+      if (!searchInput.value.trim()) {
+        searchResults.innerHTML = "";
+        searchResults.style.display = "none";
+        return;
+      }
+
       searchResults.innerHTML = "";
       if (!list || list.length === 0) {
         searchResults.style.display = "none";
@@ -197,14 +214,17 @@
         item.appendChild(info);
 
         item.addEventListener("click", () => {
+          currentSearchToken++;
+          clearTimeout(debounceTimer);
           channelIdInput.value = ch.channelId;
           updateSelectedCard(ch.channelName, ch.channelId, ch.channelImageUrl);
           saveSettings({
             channelId: ch.channelId,
             channelName: ch.channelName,
           });
-          searchResults.style.display = "none";
           searchInput.value = "";
+          searchResults.innerHTML = "";
+          searchResults.style.display = "none";
         });
 
         searchResults.appendChild(item);
