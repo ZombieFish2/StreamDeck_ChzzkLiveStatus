@@ -1,6 +1,6 @@
 {
   "name": "com.chzzk.livestatus",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Elgato Stream Deck plugin for monitoring Naver Chzzk streamer live status",
   "type": "module",
   "scripts": {

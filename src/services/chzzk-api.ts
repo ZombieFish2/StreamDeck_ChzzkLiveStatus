@@ -82,15 +82,24 @@ export class ChzzkApi {
   /**
    * 채널 검색 (검색어 자동완성 지원)
    * - 프록시 서버가 검색을 지원하지 않거나 404를 반환하면 공식 치지직 서버로 자동 폴백
+   * - bypassProxy 옵션 시 공식 서버로 직접 요청
    */
-  public static async searchChannels(keyword: string): Promise<ChzzkChannel[]> {
+  public static async searchChannels(
+    keyword: string,
+    options?: { bypassProxy?: boolean }
+  ): Promise<ChzzkChannel[]> {
     if (!keyword || keyword.trim().length === 0) return [];
     const encoded = encodeURIComponent(keyword.trim());
 
-    // 시도할 서버 목록 (프록시가 설정되어 있으면 프록시 먼저, 그 다음 공식 서버)
-    const baseUrls = [this.getBaseUrl()];
-    if (this.getBaseUrl() !== DEFAULT_OFFICIAL_URL) {
+    // 시도할 서버 목록 (bypassProxy 시 공식 서버만, 아니면 프록시 먼저 시도 후 공식 서버 폴백)
+    const baseUrls: string[] = [];
+    if (options?.bypassProxy) {
       baseUrls.push(DEFAULT_OFFICIAL_URL);
+    } else {
+      baseUrls.push(this.getBaseUrl());
+      if (this.getBaseUrl() !== DEFAULT_OFFICIAL_URL) {
+        baseUrls.push(DEFAULT_OFFICIAL_URL);
+      }
     }
 
     for (const base of baseUrls) {
@@ -125,14 +134,23 @@ export class ChzzkApi {
   /**
    * 채널 상세 정보 조회 (service/v1/channels/{channelId})
    * - 프록시 실패 시 공식 서버로 자동 폴백
+   * - bypassProxy 옵션 시 공식 서버로 직접 요청
    */
-  public static async getChannel(channelId: string): Promise<ChzzkChannel | null> {
+  public static async getChannel(
+    channelId: string,
+    options?: { bypassProxy?: boolean }
+  ): Promise<ChzzkChannel | null> {
     if (!channelId) return null;
     const encoded = encodeURIComponent(channelId.trim());
 
-    const baseUrls = [this.getBaseUrl()];
-    if (this.getBaseUrl() !== DEFAULT_OFFICIAL_URL) {
+    const baseUrls: string[] = [];
+    if (options?.bypassProxy) {
       baseUrls.push(DEFAULT_OFFICIAL_URL);
+    } else {
+      baseUrls.push(this.getBaseUrl());
+      if (this.getBaseUrl() !== DEFAULT_OFFICIAL_URL) {
+        baseUrls.push(DEFAULT_OFFICIAL_URL);
+      }
     }
 
     for (const base of baseUrls) {
@@ -167,17 +185,47 @@ export class ChzzkApi {
   /**
    * 실시간 라이브 상세 조회 (v3 live-detail 최우선, v2 및 polling 폴백)
    * - 1회 호출로 라이브 상태 + 스트리머 프로필/채널명 동시 수집
+   * - 프록시 서버에 없는 스트리머이거나 404/실패 시 공식 치지직 서버로 자동 원본 폴백
+   * - bypassProxy 옵션 지정 시 공식 치지직 서버로 직접 연결
    */
   public static async getLiveDetail(
-    channelId: string
+    channelId: string,
+    options?: { bypassProxy?: boolean }
   ): Promise<LiveDetailResult | null> {
     if (!channelId) return null;
 
-    const base = this.getBaseUrl();
+    const baseUrls: string[] = [];
+    if (options?.bypassProxy) {
+      baseUrls.push(DEFAULT_OFFICIAL_URL);
+    } else {
+      baseUrls.push(this.getBaseUrl());
+      if (this.getBaseUrl() !== DEFAULT_OFFICIAL_URL) {
+        baseUrls.push(DEFAULT_OFFICIAL_URL);
+      }
+    }
+
+    for (const base of baseUrls) {
+      const result = await this.fetchLiveDetailFromBase(base, channelId);
+      if (result) {
+        return result;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 특정 Base URL로부터 라이브 정보 조회 (v3 -> v2 -> polling 순)
+   */
+  private static async fetchLiveDetailFromBase(
+    base: string,
+    channelId: string
+  ): Promise<LiveDetailResult | null> {
+    const encodedId = encodeURIComponent(channelId.trim());
 
     // 1. 권장 표준인 v3 live-detail 시도
     try {
-      const v3Url = `${base}/service/v3/channels/${encodeURIComponent(channelId)}/live-detail`;
+      const v3Url = `${base}/service/v3/channels/${encodedId}/live-detail`;
       const res = await fetch(v3Url, {
         headers: DEFAULT_HEADERS,
         signal: AbortSignal.timeout(6000),
@@ -203,7 +251,7 @@ export class ChzzkApi {
 
     // 2. v2 live-detail 폴백
     try {
-      const v2Url = `${base}/service/v2/channels/${encodeURIComponent(channelId)}/live-detail`;
+      const v2Url = `${base}/service/v2/channels/${encodedId}/live-detail`;
       const res = await fetch(v2Url, {
         headers: DEFAULT_HEADERS,
         signal: AbortSignal.timeout(6000),
@@ -228,38 +276,30 @@ export class ChzzkApi {
     }
 
     // 3. 기존 polling/v2 live-status 폴백
-    return this.getLiveStatusFallback(channelId);
-  }
-
-  /**
-   * 레거시 polling/v2 폴백 메서드
-   */
-  private static async getLiveStatusFallback(
-    channelId: string
-  ): Promise<LiveDetailResult | null> {
     try {
-      const base = this.getBaseUrl();
       const res = await fetch(
-        `${base}/polling/v2/channels/${encodeURIComponent(channelId)}/live-status`,
+        `${base}/polling/v2/channels/${encodedId}/live-status`,
         {
           headers: DEFAULT_HEADERS,
           signal: AbortSignal.timeout(6000),
         }
       );
-      if (!res.ok) return null;
-      const json = (await res.json()) as any;
-      if (json.code !== 200 || !json.content) return null;
-
-      return {
-        isLive: json.content.status === "OPEN",
-        liveTitle: json.content.liveTitle || null,
-        concurrentUserCount: json.content.concurrentUserCount || 0,
-        liveCategory: json.content.liveCategoryValue || null,
-      };
+      if (res.ok) {
+        const json = (await res.json()) as any;
+        if (json.code === 200 && json.content) {
+          return {
+            isLive: json.content.status === "OPEN",
+            liveTitle: json.content.liveTitle || null,
+            concurrentUserCount: json.content.concurrentUserCount || 0,
+            liveCategory: json.content.liveCategoryValue || null,
+          };
+        }
+      }
     } catch (err) {
-      console.error(`[ChzzkApi] Error fetching fallback live status for ${channelId}:`, err);
-      return null;
+      // 해당 base 실패
     }
+
+    return null;
   }
 
   /**

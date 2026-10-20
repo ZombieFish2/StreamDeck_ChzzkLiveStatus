@@ -58,9 +58,14 @@ export class MultiStreamerAction extends SingletonAction<MultiStreamerSettings> 
 
     const channelIds = (settings.channels || []).map((c) => c.channelId);
     if (channelIds.length > 0) {
-      this.manager.subscribe(actionId, channelIds, () => {
-        this.updateActionDisplay(ev.action, ev.payload.settings);
-      });
+      this.manager.subscribe(
+        actionId,
+        channelIds,
+        () => {
+          this.updateActionDisplay(ev.action, ev.payload.settings);
+        },
+        { bypassProxy: !!settings.bypassProxy }
+      );
     }
 
     this.updateActionDisplay(ev.action, settings);
@@ -93,9 +98,14 @@ export class MultiStreamerAction extends SingletonAction<MultiStreamerSettings> 
 
     const channelIds = (settings.channels || []).map((c) => c.channelId);
     if (channelIds.length > 0) {
-      this.manager.subscribe(actionId, channelIds, () => {
-        this.updateActionDisplay(ev.action, settings);
-      });
+      this.manager.subscribe(
+        actionId,
+        channelIds,
+        () => {
+          this.updateActionDisplay(ev.action, settings);
+        },
+        { bypassProxy: !!settings.bypassProxy }
+      );
     } else {
       this.manager.unsubscribe(actionId);
     }
@@ -290,15 +300,17 @@ export class MultiStreamerAction extends SingletonAction<MultiStreamerSettings> 
       ChzzkApi.setBaseUrl(payload.proxyUrl);
     }
 
+    const bypassProxy = !!payload?.bypassProxy;
+
     if (payload?.event === "searchChannels") {
-      const results = await ChzzkApi.searchChannels(payload.keyword || "");
+      const results = await ChzzkApi.searchChannels(payload.keyword || "", { bypassProxy });
       await streamDeck.ui.current?.sendToPropertyInspector({
         event: "searchResults",
         requestId: payload.requestId,
         data: results as any,
       });
     } else if (payload?.event === "getChannelInfo") {
-      const info = await ChzzkApi.getChannel(payload.channelId || "");
+      const info = await ChzzkApi.getChannel(payload.channelId || "", { bypassProxy });
       await streamDeck.ui.current?.sendToPropertyInspector({
         event: "channelInfo",
         requestId: payload.requestId,

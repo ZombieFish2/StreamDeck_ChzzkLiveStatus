@@ -55,6 +55,19 @@ async function runTests() {
   console.log(`  ✓ v3 응답: 라이브=${liveDetail.isLive ? "ON" : "OFF"}, 채널명=${liveDetail.channelName}, 시청자=${liveDetail.concurrentUserCount}`);
   assert(liveDetail.channelName, "Channel name must exist in v3 live-detail");
 
+  // 3-1. 프록시 실패/미등록 채널 시 getLiveDetail 공식 서버 자동 폴백 테스트
+  console.log("\n3-1. 프록시 설정 시 getLiveDetail 공식 서버 자동 폴백 및 bypassProxy 테스트...");
+  ChzzkApi.setBaseUrl("http://localhost:9999"); // 미작동/404 프록시 설정
+  const fallbackLiveDetail = await ChzzkApi.getLiveDetail(first.channelId);
+  assert(fallbackLiveDetail !== null, "Live detail must fall back to official server when proxy fails");
+  console.log(`  ✓ 프록시 미응답/404 시 공식 서버 자동 폴백 성공: ${fallbackLiveDetail.channelName}`);
+
+  // bypassProxy: true 테스트
+  const directLiveDetail = await ChzzkApi.getLiveDetail(first.channelId, { bypassProxy: true });
+  assert(directLiveDetail !== null, "Live detail must succeed when bypassProxy: true");
+  console.log(`  ✓ bypassProxy: true 시 공식 서버 직접 연결 성공: ${directLiveDetail.channelName}`);
+  ChzzkApi.setBaseUrl(""); // 공식 URL로 원복
+
   // 4. 프로필 이미지 Base64 변환 테스트
   console.log("\n4. 프로필 이미지 다운로드 및 Base64 변환 테스트...");
   const imageBase64 = await ChzzkApi.downloadImageAsBase64(liveDetail.channelImageUrl || first.channelImageUrl);

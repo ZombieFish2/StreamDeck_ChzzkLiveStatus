@@ -51,6 +51,19 @@
       <div class="helper-text">어느 버튼에서나 한 번 입력하면 모든 버튼에 자동 공유됩니다. (도메인, https, 로컬 모두 지원)</div>
     </div>
 
+    <!-- 선택적 프록시 OFF (공식 API 직접 연결) -->
+    <div class="sdpi-item" style="margin-top: 6px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <input type="checkbox" id="bypassProxyCheckbox" style="margin: 0; width: 16px; height: 16px; cursor: pointer;" />
+        <label for="bypassProxyCheckbox" style="margin: 0; cursor: pointer; font-size: 11px; font-weight: 500; color: #ddd;">
+          이 버튼은 프록시 대신 공식 API 직접 연결 (프록시 OFF)
+        </label>
+      </div>
+      <div class="helper-text" style="margin-left: 24px; margin-top: 3px;">
+        캐시 서버에 등록되지 않은 스트리머이거나 원본 데이터를 직접 수신하고 싶을 때 체크하세요. (체크 해제 시에도 프록시 404 시 자동 폴백 지원)
+      </div>
+    </div>
+
     <!-- 옵션: 온라인 스트리머만 순환 -->
     <div class="sdpi-item">
       <label class="checkbox-label">
@@ -72,6 +85,7 @@
     const channelCountBadge = document.getElementById("channelCountBadge");
     const intervalInput = document.getElementById("intervalInput");
     const proxyUrlInput = document.getElementById("proxyUrlInput");
+    const bypassProxyCheckbox = document.getElementById("bypassProxyCheckbox");
     const cycleLiveOnlyCheckbox = document.getElementById("cycleLiveOnlyCheckbox");
 
     let channels = [];
@@ -89,6 +103,9 @@
         proxyUrlInput.value = settings.proxyUrl;
       } else if (currentGlobalSettings && currentGlobalSettings.proxyUrl) {
         proxyUrlInput.value = currentGlobalSettings.proxyUrl;
+      }
+      if (typeof settings.bypassProxy === "boolean") {
+        bypassProxyCheckbox.checked = settings.bypassProxy;
       }
       if (typeof settings.cycleOnlyLive === "boolean") {
         cycleLiveOnlyCheckbox.checked = settings.cycleOnlyLive;
@@ -131,11 +148,16 @@
         channels: channels,
         pollingInterval: parseInt(intervalInput.value, 10) || 60,
         proxyUrl: proxyUrlInput.value.trim(),
+        bypassProxy: bypassProxyCheckbox.checked,
         cycleOnlyLive: cycleLiveOnlyCheckbox.checked,
       });
     }
 
     intervalInput.addEventListener("change", () => {
+      saveCurrentState();
+    });
+
+    bypassProxyCheckbox.addEventListener("change", () => {
       saveCurrentState();
     });
 

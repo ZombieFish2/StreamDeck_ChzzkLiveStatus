@@ -3,6 +3,12 @@ import { ChzzkLiveStatus } from "../types/chzzk.js";
 
 type UpdateListener = () => void;
 
+interface SubscriptionEntry {
+  channelIds: string[];
+  callback: UpdateListener;
+  bypassProxy?: boolean;
+}
+
 interface ChannelData {
   channelId: string;
   channelName: string;
@@ -20,10 +26,7 @@ export class ChzzkManager {
   private static instance: ChzzkManager;
 
   private channelDataMap = new Map<string, ChannelData>();
-  private subscriptions = new Map<
-    string,
-    { channelIds: string[]; callback: UpdateListener }
-  >();
+  private subscriptions = new Map<string, SubscriptionEntry>();
   private pollingTimer: NodeJS.Timeout | null = null;
   private currentIntervalSec = 60;
   private isPolling = false;
@@ -56,10 +59,15 @@ export class ChzzkManager {
   public subscribe(
     subscriberId: string,
     channelIds: string[],
-    callback: UpdateListener
+    callback: UpdateListener,
+    options?: { bypassProxy?: boolean }
   ): void {
     const validIds = channelIds.filter((id) => id && id.trim().length > 0);
-    this.subscriptions.set(subscriberId, { channelIds: validIds, callback });
+    this.subscriptions.set(subscriberId, {
+      channelIds: validIds,
+      callback,
+      bypassProxy: !!options?.bypassProxy,
+    });
 
     // 새로 등록된 채널이 있으면 즉시 fetch 실행
     let hasNew = false;
@@ -159,17 +167,21 @@ export class ChzzkManager {
     await Promise.all(
       channelIds.map(async (channelId) => {
         try {
+          const bypassProxy = Array.from(this.subscriptions.values()).some(
+            (sub) => sub.channelIds.includes(channelId) && sub.bypassProxy
+          );
+
           let cached = this.channelDataMap.get(channelId);
 
           // 최신 v3 live-detail 호출 (1회 호출로 라이브 상태 + 스트리머 프로필 동시 획득)
-          let liveDetail = await ChzzkApi.getLiveDetail(channelId);
+          let liveDetail = await ChzzkApi.getLiveDetail(channelId, { bypassProxy });
 
           let channelName = liveDetail?.channelName || cached?.channelName;
           let channelImageUrl = liveDetail?.channelImageUrl || cached?.channelImageUrl;
 
           // 채널명이나 프로필 이미지가 없으면 채널 정보 API 추가 조회
           if (!channelName || !channelImageUrl) {
-            const channelInfo = await ChzzkApi.getChannel(channelId);
+            const channelInfo = await ChzzkApi.getChannel(channelId, { bypassProxy });
             if (channelInfo) {
               channelName = channelName || channelInfo.channelName;
               channelImageUrl = channelImageUrl || channelInfo.channelImageUrl;

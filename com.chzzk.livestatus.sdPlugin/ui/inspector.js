@@ -126,6 +126,9 @@ function sendToPlugin(payload) {
 }
 
 function getEffectiveProxyUrl() {
+  if (currentSettings.bypassProxy) {
+    return "";
+  }
   if (currentSettings.proxyUrl && currentSettings.proxyUrl.trim().length > 0) {
     return currentSettings.proxyUrl.trim();
   }
@@ -150,6 +153,7 @@ async function searchChzzkChannels(keyword) {
       event: "searchChannels",
       keyword: trimmed,
       proxyUrl: proxy,
+      bypassProxy: !!currentSettings.bypassProxy,
       requestId: reqId,
     });
     // 5초 타임아웃
@@ -177,6 +181,7 @@ async function getChzzkChannelInfo(channelId) {
       event: "getChannelInfo",
       channelId: trimmed,
       proxyUrl: proxy,
+      bypassProxy: !!currentSettings.bypassProxy,
       requestId: reqId,
     });
     setTimeout(() => {

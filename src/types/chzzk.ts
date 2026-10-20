@@ -25,6 +25,7 @@ export interface SingleStreamerSettings {
   channelName?: string;
   pollingInterval?: number; // 초 단위, 기본 60초
   proxyUrl?: string; // 프록시/캐시 서버 Base URL (예: https://proxy.domain.com 또는 http://localhost:8000)
+  bypassProxy?: boolean; // 해당 버튼에 대해 공통 프록시를 끄고 공식 API 직접 연결
 }
 
 export interface MultiStreamerItem {
@@ -40,6 +41,7 @@ export interface MultiStreamerSettings {
   pollingInterval?: number; // 초 단위, 기본 60초
   cycleOnlyLive?: boolean; // 기본 true
   proxyUrl?: string; // 프록시/캐시 서버 Base URL
+  bypassProxy?: boolean; // 해당 버튼에 대해 공통 프록시를 끄고 공식 API 직접 연결
 }
 
 export interface ChzzkGlobalSettings {
